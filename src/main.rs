@@ -9,6 +9,7 @@ use tracing::info;
 #[derive(Parser)]
 #[command(name = "git-wtree")]
 #[command(about = "A convenient git worktree wrapper", version)]
+#[command(after_help = get_help_footer())]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -41,6 +42,28 @@ enum Commands {
     Status,
     /// Clean up missing worktrees
     Clean,
+}
+
+fn get_help_footer() -> &'static str {
+    let current_dir = env::current_dir().unwrap_or_default();
+    let worktree_base = env::var("GIT_WTREE_BASE").unwrap_or_else(|_| {
+        if let Ok(repo) = Repository::open(&current_dir) {
+            if let Some(workdir) = repo.workdir() {
+                if let Some(parent) = workdir.parent() {
+                    return parent.to_string_lossy().to_string();
+                }
+            }
+        }
+        String::from("(parent of current directory)")
+    });
+    
+    // Static string is required for clap, so we use a lazy static
+    Box::leak(format!(
+        "\nCurrent Settings:\n  Working Directory: {}\n  Worktree Base: {}\n  GIT_WTREE_BASE: {}",
+        current_dir.display(),
+        worktree_base,
+        env::var("GIT_WTREE_BASE").unwrap_or_else(|_| "(not set)".to_string())
+    ).into_boxed_str())
 }
 
 fn main() -> Result<()> {
@@ -92,24 +115,41 @@ fn add_worktree(branch: &str, custom_path: Option<String>) -> Result<()> {
     // Check if branch exists
     let branch_exists = repo.find_branch(branch, git2::BranchType::Local).is_ok();
     
-    // Create the worktree
-    let _wt = if branch_exists {
-        repo.worktree(
-            branch,
-            &path,
-            None,
-        )?
-    } else {
-        // Create new branch from HEAD
-        let head = repo.head()?.peel_to_commit()?;
-        let _new_branch = repo.branch(branch, &head, false)?;
+    // Create worktree with sanitized name (replace / with - for worktree identifier)
+    let worktree_name = branch.replace('/', "-");
+    
+    // Create the worktree using git2-rs
+    if branch_exists {
+        // For existing branch, set the reference to the branch
+        let branch_ref = repo.find_branch(branch, git2::BranchType::Local)?;
+        let branch_ref = branch_ref.get();
+        
+        let mut opts = git2::WorktreeAddOptions::new();
+        opts.reference(Some(&branch_ref));
         
         repo.worktree(
-            branch,
+            &worktree_name,
             &path,
-            None,
-        )?
-    };
+            Some(&opts),
+        )?;
+    } else {
+        // For new branch, create worktree first, then create branch
+        let opts = git2::WorktreeAddOptions::new();
+        
+        // Create the worktree
+        repo.worktree(
+            &worktree_name,
+            &path,
+            Some(&opts),
+        )?;
+        
+        // Open the new worktree repository and create the new branch
+        let wt_repo = Repository::open(&path)?;
+        let head = wt_repo.head()?.peel_to_commit()?;
+        let new_branch = wt_repo.branch(branch, &head, false)?;
+        wt_repo.set_head(new_branch.get().name().unwrap())?;
+        wt_repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
+    }
 
     println!(
         "{}",
