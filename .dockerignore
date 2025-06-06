@@ -1,0 +1,32 @@
+# Git
+.git/
+.gitignore
+
+# Build artifacts
+target/
+*.pyc
+__pycache__/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+docs/
+
+# Test results
+test-results/
+*.log
+
+# Docker
+Dockerfile
+.dockerignore
+run_docker_tests.py
