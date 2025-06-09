@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use colored::Colorize;
 use git2::{Repository, StatusOptions};
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::info;
 
@@ -48,13 +49,11 @@ fn get_help_footer() -> &'static str {
     let current_dir = env::current_dir().unwrap_or_default();
     let worktree_base = env::var("GIT_WTREE_BASE").unwrap_or_else(|_| {
         if let Ok(repo) = Repository::open(&current_dir) {
-            if let Some(workdir) = repo.workdir() {
-                if let Some(parent) = workdir.parent() {
-                    return parent.to_string_lossy().to_string();
-                }
+            if let Ok(git_root) = find_git_root(&repo) {
+                return git_root.join(".worktree").to_string_lossy().to_string();
             }
         }
-        String::from("(parent of current directory)")
+        String::from("(git root)/.worktree")
     });
     
     // Static string is required for clap, so we use a lazy static
@@ -64,6 +63,33 @@ fn get_help_footer() -> &'static str {
         worktree_base,
         env::var("GIT_WTREE_BASE").unwrap_or_else(|_| "(not set)".to_string())
     ).into_boxed_str())
+}
+
+fn find_git_root(repo: &Repository) -> Result<PathBuf> {
+    // Get the path to the .git directory
+    let git_path = repo.path();
+    
+    // If it's a regular repository (not a worktree), the parent of .git is the root
+    if git_path.file_name() == Some(std::ffi::OsStr::new(".git")) {
+        git_path.parent()
+            .map(|p| p.to_path_buf())
+            .context("Cannot get parent of .git directory")
+    } else {
+        // For worktrees, we need to find the common directory
+        // The common directory is stored in the repository
+        if let Ok(common_dir) = fs::read_to_string(repo.path().join("commondir")) {
+            // commondir contains path to the main .git directory
+            let common_path = PathBuf::from(common_dir.trim());
+            common_path.parent()
+                .map(|p| p.to_path_buf())
+                .context("Cannot get parent of common directory")
+        } else {
+            // Fallback to workdir
+            repo.workdir()
+                .map(|p| p.to_path_buf())
+                .context("Cannot get working directory")
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -97,12 +123,9 @@ fn add_worktree(branch: &str, custom_path: Option<String>) -> Result<()> {
         let base_path = if let Ok(base) = env::var("GIT_WTREE_BASE") {
             PathBuf::from(base)
         } else {
-            let repo_path = repo.workdir()
-                .context("Cannot get repository working directory")?;
-            repo_path
-                .parent()
-                .context("Cannot get parent directory")?
-                .to_path_buf()
+            // Find git root directory (where .git is located)
+            let git_root = find_git_root(&repo)?;
+            git_root.join(".worktree")
         };
         
         // Convert branch name to directory name (e.g., feature/auth -> auth)
