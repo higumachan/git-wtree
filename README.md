@@ -34,6 +34,45 @@ git wtree go new-feature
 - Displays cd command for navigation
 - Shows available worktrees if target not found
 
+#### Shell Integration
+
+To actually change directories with `git wtree go`, you need to set up shell integration:
+
+**For Bash:**
+```bash
+# Add to your ~/.bashrc
+source /path/to/git-wtree/shell/git-wtree.bash
+
+# Then use either:
+git-wtree-go feature-branch
+# or the alias:
+wtgo feature-branch
+```
+
+**For Zsh:**
+```bash
+# Add to your ~/.zshrc
+source /path/to/git-wtree/shell/git-wtree.zsh
+
+# Then use either:
+git-wtree-go feature-branch
+# or the alias:
+wtgo feature-branch
+```
+
+**For Fish:**
+```fish
+# Add to your ~/.config/fish/config.fish
+source /path/to/git-wtree/shell/git-wtree.fish
+
+# Then use either:
+git-wtree-go feature-branch
+# or the alias:
+wtgo feature-branch
+```
+
+These shell functions use the `--print-path` flag to get the worktree path and change to it automatically.
+
 ### 4. **Remove worktree (`remove`, `rm`)**
 ```bash
 git wtree remove old-feature
