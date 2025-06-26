@@ -64,6 +64,7 @@ complete -c git-wtree -n __fish_git_wtree_needs_command -a add -d "Create a new 
 complete -c git-wtree -n __fish_git_wtree_needs_command -a list -d "List all worktrees"
 complete -c git-wtree -n __fish_git_wtree_needs_command -a ls -d "List all worktrees (alias)"
 complete -c git-wtree -n __fish_git_wtree_needs_command -a go -d "Show navigation guide to a worktree"
+complete -c git-wtree -n __fish_git_wtree_needs_command -a goroot -d "Navigate to git repository root"
 complete -c git-wtree -n __fish_git_wtree_needs_command -a remove -d "Remove a worktree"
 complete -c git-wtree -n __fish_git_wtree_needs_command -a rm -d "Remove a worktree (alias)"
 complete -c git-wtree -n __fish_git_wtree_needs_command -a status -d "Show status of all worktrees"
@@ -95,6 +96,10 @@ complete -c git-wtree -n __fish_git_wtree_add_needs_path -F -d "Worktree path"
 
 # Completions for 'go' subcommand
 complete -c git-wtree -n "__fish_git_wtree_using_command go" -a "(__fish_git_wtree_worktrees)" -d "Worktree name"
+complete -c git-wtree -n "__fish_git_wtree_using_command go" -l print-path -d "Print only the worktree path"
+
+# Completions for 'goroot' subcommand
+complete -c git-wtree -n "__fish_git_wtree_using_command goroot" -l print-path -d "Print only the root path"
 
 # Completions for 'remove' and 'rm' subcommands
 complete -c git-wtree -n "__fish_git_wtree_using_command remove" -a "(__fish_git_wtree_worktrees)" -d "Worktree name"

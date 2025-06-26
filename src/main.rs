@@ -32,6 +32,9 @@ enum Commands {
     Go {
         /// Worktree name or branch name
         name: String,
+        /// Print only the worktree path (for shell integration)
+        #[arg(long)]
+        print_path: bool,
     },
     /// Remove a worktree
     #[command(alias = "rm")]
@@ -43,6 +46,13 @@ enum Commands {
     Status,
     /// Clean up missing worktrees
     Clean,
+    /// Navigate to git repository root
+    #[command(name = "goroot")]
+    GoRoot {
+        /// Print only the root path (for shell integration)
+        #[arg(long)]
+        print_path: bool,
+    },
 }
 
 fn get_help_footer() -> &'static str {
@@ -105,10 +115,11 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Add { branch, path } => add_worktree(&branch, path),
         Commands::List => list_worktrees(),
-        Commands::Go { name } => go_to_worktree(&name),
+        Commands::Go { name, print_path } => go_to_worktree(&name, print_path),
         Commands::Remove { name } => remove_worktree(&name),
         Commands::Status => show_status(),
         Commands::Clean => clean_worktrees(),
+        Commands::GoRoot { print_path } => go_to_root(print_path),
     }
 }
 
@@ -247,7 +258,7 @@ fn list_worktrees() -> Result<()> {
     Ok(())
 }
 
-fn go_to_worktree(name: &str) -> Result<()> {
+fn go_to_worktree(name: &str, print_path: bool) -> Result<()> {
     let repo = Repository::open_from_env()
         .context("Not in a git repository")?;
     
@@ -292,12 +303,40 @@ fn go_to_worktree(name: &str) -> Result<()> {
     }
     
     if let Some(path) = found_path {
-        println!("{}", "To navigate to this worktree, run:".green());
-        println!("  cd {}", path.display());
+        if print_path {
+            // Print only the path for shell integration
+            println!("{}", path.display());
+        } else {
+            println!("{}", "To navigate to this worktree, run:".green());
+            println!("  cd {}", path.display());
+        }
     } else {
-        println!("{}", format!("Worktree '{}' not found", name).red());
-        println!("\nAvailable worktrees:");
-        list_worktrees()?;
+        if print_path {
+            // When using --print-path, return with an error code but no output
+            std::process::exit(1);
+        } else {
+            println!("{}", format!("Worktree '{}' not found", name).red());
+            println!("\nAvailable worktrees:");
+            list_worktrees()?;
+        }
+    }
+    
+    Ok(())
+}
+
+fn go_to_root(print_path: bool) -> Result<()> {
+    let repo = Repository::open_from_env()
+        .context("Not in a git repository")?;
+    
+    // Get the root directory of the git repository
+    let root_path = find_git_root(&repo)?;
+    
+    if print_path {
+        // Print only the path for shell integration
+        println!("{}", root_path.display());
+    } else {
+        println!("{}", "To navigate to the git repository root, run:".green());
+        println!("  cd {}", root_path.display());
     }
     
     Ok(())
