@@ -135,6 +135,18 @@ fn add_worktree(branch: &str, custom_path: Option<String>) -> Result<()> {
 
     info!("Creating worktree at: {}", path.display());
 
+    // Ensure parent directory exists
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+            println!(
+                "{}",
+                format!("✓ Created directory: {}", parent.display()).green()
+            );
+        }
+    }
+
     // Check if branch exists
     let branch_exists = repo.find_branch(branch, git2::BranchType::Local).is_ok();
     
