@@ -26,5 +26,22 @@ git-wtree-go() {
     fi
 }
 
-# Optional: Create an alias for convenience
+# git-wtree goroot subcommand shell wrapper
+git-wtree-goroot() {
+    # Call git-wtree goroot with --print-path to get the directory
+    local dir
+    dir=$(git wtree goroot --print-path 2>/dev/null)
+    
+    if [ $? -eq 0 ] && [ -n "$dir" ]; then
+        cd "$dir" || return 1
+        echo "Changed to git root: $dir" >&2
+    else
+        # If --print-path failed, fall back to normal output
+        git wtree goroot
+        return 1
+    fi
+}
+
+# Optional: Create aliases for convenience
 alias wtgo='git-wtree-go'
+alias wtroot='git-wtree-goroot'

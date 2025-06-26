@@ -1,0 +1,81 @@
+#compdef git-wtree
+
+# Zsh completion for git-wtree
+
+# Helper function to list git branches
+_git_wtree_branches() {
+    local branches
+    branches=(${(f)"$(git branch --format='%(refname:short)' 2>/dev/null)"})
+    branches+=(${(f)"$(git branch -r --format='%(refname:short)' 2>/dev/null | sed 's|^origin/||')"})
+    _describe 'branch' branches
+}
+
+# Helper function to list worktrees
+_git_wtree_worktrees() {
+    local worktrees
+    worktrees=("main")
+    worktrees+=(${(f)"$(git worktree list --porcelain 2>/dev/null | grep '^worktree ' | sed 's/^worktree //' | xargs -I {} basename {})"})
+    _describe 'worktree' worktrees
+}
+
+# Main completion function
+_git_wtree() {
+    local context state line
+    typeset -A opt_args
+
+    # Define subcommands
+    local -a subcommands
+    subcommands=(
+        'add:Create a new worktree'
+        'list:List all worktrees'
+        'ls:List all worktrees (alias)'
+        'go:Show navigation guide to a worktree'
+        'goroot:Navigate to git repository root'
+        'remove:Remove a worktree'
+        'rm:Remove a worktree (alias)'
+        'status:Show status of all worktrees'
+        'clean:Clean up missing worktrees'
+    )
+
+    # First level completion (subcommands)
+    _arguments -C \
+        '1: :->subcommand' \
+        '*:: :->args'
+
+    case $state in
+        subcommand)
+            _describe 'git-wtree subcommand' subcommands
+            ;;
+        args)
+            case $line[1] in
+                add)
+                    _arguments \
+                        '1:branch:_git_wtree_branches' \
+                        '2:path:_directories'
+                    ;;
+                go)
+                    _arguments \
+                        '--print-path[Print only the worktree path]' \
+                        '1:worktree:_git_wtree_worktrees'
+                    ;;
+                remove|rm)
+                    _arguments \
+                        '1:worktree:_git_wtree_worktrees'
+                    ;;
+                goroot)
+                    _arguments \
+                        '--print-path[Print only the root path]'
+                    ;;
+                *)
+                    # No additional arguments for other subcommands
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# Register the completion
+_git_wtree "$@"
+
+# Also handle 'git wtree' (when used as a git subcommand)
+compdef _git_wtree git-wtree
