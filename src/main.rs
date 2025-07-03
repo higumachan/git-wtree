@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use git2::{Repository, StatusOptions};
+use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,6 +17,20 @@ struct Cli {
     command: Commands,
 }
 
+#[derive(Serialize, Deserialize)]
+struct WorktreeInfo {
+    name: String,
+    path: String,
+    branch: String,
+    commit: String,
+    is_main: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WorktreeList {
+    worktrees: Vec<WorktreeInfo>,
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Create a new worktree
@@ -27,7 +42,11 @@ enum Commands {
     },
     /// List all worktrees
     #[command(alias = "ls")]
-    List,
+    List {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
     /// Show navigation guide to a worktree
     Go {
         /// Worktree name or branch name
@@ -114,7 +133,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Add { branch, path } => add_worktree(&branch, path),
-        Commands::List => list_worktrees(),
+        Commands::List { json } => list_worktrees(json),
         Commands::Go { name, print_path } => go_to_worktree(&name, print_path),
         Commands::Remove { name } => remove_worktree(&name),
         Commands::Status => show_status(),
@@ -208,11 +227,11 @@ fn add_worktree(branch: &str, custom_path: Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn list_worktrees() -> Result<()> {
+fn list_worktrees(json: bool) -> Result<()> {
     let repo = Repository::open_from_env()
         .context("Not in a git repository")?;
     
-    println!("{}", "Worktrees:".bold());
+    let mut worktree_list = Vec::new();
     
     // List main worktree
     let main_path = repo.workdir()
@@ -221,15 +240,13 @@ fn list_worktrees() -> Result<()> {
     let branch = head.shorthand().unwrap_or("HEAD");
     let commit = head.peel_to_commit()?;
     
-    println!(
-        "  {} {} ({})",
-        "[main]".green().bold(),
-        main_path.display(),
-        format!("{} {}", 
-            branch.blue(), 
-            &commit.id().to_string()[..7].dimmed()
-        )
-    );
+    worktree_list.push(WorktreeInfo {
+        name: "main".to_string(),
+        path: main_path.to_string_lossy().to_string(),
+        branch: branch.to_string(),
+        commit: commit.id().to_string()[..7].to_string(),
+        is_main: true,
+    });
     
     // List other worktrees
     let worktrees = repo.worktrees()?;
@@ -242,16 +259,44 @@ fn list_worktrees() -> Result<()> {
                 let branch = head.shorthand().unwrap_or("HEAD");
                 let commit = head.peel_to_commit()?;
                 
+                worktree_list.push(WorktreeInfo {
+                    name: name_str.to_string(),
+                    path: wt.path().to_string_lossy().to_string(),
+                    branch: branch.to_string(),
+                    commit: commit.id().to_string()[..7].to_string(),
+                    is_main: false,
+                });
+            };
+        }
+    }
+    
+    if json {
+        let output = WorktreeList { worktrees: worktree_list };
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    } else {
+        println!("{}", "Worktrees:".bold());
+        for wt in worktree_list {
+            if wt.is_main {
                 println!(
                     "  {} {} ({})",
-                    format!("[{}]", name_str).blue(),
-                    wt.path().display(),
+                    "[main]".green().bold(),
+                    wt.path,
                     format!("{} {}", 
-                        branch.blue(), 
-                        &commit.id().to_string()[..7].dimmed()
+                        wt.branch.blue(), 
+                        wt.commit.dimmed()
                     )
                 );
-            };
+            } else {
+                println!(
+                    "  {} {} ({})",
+                    format!("[{}]", wt.name).blue(),
+                    wt.path,
+                    format!("{} {}", 
+                        wt.branch.blue(), 
+                        wt.commit.dimmed()
+                    )
+                );
+            }
         }
     }
     
@@ -317,7 +362,7 @@ fn go_to_worktree(name: &str, print_path: bool) -> Result<()> {
         } else {
             println!("{}", format!("Worktree '{}' not found", name).red());
             println!("\nAvailable worktrees:");
-            list_worktrees()?;
+            list_worktrees(false)?;
         }
     }
     
